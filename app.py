@@ -28,7 +28,7 @@ def infer(video_source, audio_target):
     
     # Create a temporary directory to store the output file
     output_dir = tempfile.mkdtemp()
-    output_file = os.path.join(output_dir, f'output_video_{timestamp}.mp4')
+    output_file = os.path.join(output_dir, f'allwebtool_result_{timestamp}.mp4')
 
     # Load the video
     video = VideoFileClip(input_file)
