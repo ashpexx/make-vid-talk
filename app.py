@@ -91,4 +91,4 @@ with gr.Blocks(css=css) as demo:
             
     submit_btn.click(fn=infer, inputs=[video_source, audio_target], outputs=[result])
     
-demo.queue(max_size=12).launch()
+demo.queue(max_size=12).launch(share=True)
