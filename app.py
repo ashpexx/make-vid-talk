@@ -5,7 +5,8 @@ import subprocess
 import tempfile
 from moviepy.editor import VideoFileClip
 
-app = Flask(_name_)
+__name__ = "__main__"
+app = Flask(__name__)
 
 # Ensure temp directories exist
 os.makedirs('results', exist_ok=True)
@@ -64,5 +65,5 @@ def generate():
     output_file = infer(video_path, audio_path)
     return send_file(output_file, as_attachment=True)
 
-if _name_ == '_main_':
+if __name__ == '__main__':
     app.run(debug=True)
