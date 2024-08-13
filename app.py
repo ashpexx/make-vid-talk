@@ -1,94 +1,106 @@
+from flask import Flask, request, render_template, send_file
 import os
-import datetime
+import shutil
 import subprocess
-import tempfile
-import gradio as gr
-from moviepy.editor import VideoFileClip
+import random
 
-# execute a CLI command
-def execute_command(command: str) -> None:
-    subprocess.run(command, check=True)
+app = Flask(_name_)
 
+# Ensure temp directories exist
+os.makedirs('temp/video', exist_ok=True)
+os.makedirs('temp/audio', exist_ok=True)
+os.makedirs('results', exist_ok=True)
 
-def infer(video_source, audio_target):
-    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    
-    output = f"results/result_{timestamp}.mp4"
-    command = [
-      f"python", 
-      f"inference.py",
-      f"--face={video_source}",
-      f"--audio={audio_target}",
-      f"--outfile={output}"
-    ]
+def convert(segment_length, video_path, audio_path):
+    if segment_length is None:
+        segment_length = 0
+    print(video_path, audio_path)
 
-    execute_command(command)
+    if segment_length != 0:
+        video_segments = cut_video_segments(video_path, segment_length)
+        audio_segments = cut_audio_segments(audio_path, segment_length)
+    else:
+        video_segments = [move_file(video_path, 'temp/video')]
+        audio_segments = [move_file(audio_path, 'temp/audio')]
 
-    input_file = output  # Replace with the path to your input video
-    
-    # Create a temporary directory to store the output file
-    output_dir = tempfile.mkdtemp()
-    output_file = os.path.join(output_dir, f'allwebtool_result_{timestamp}.mp4')
+    processed_segments = []
+    for i, (video_seg, audio_seg) in enumerate(zip(video_segments, audio_segments)):
+        processed_output = process_segment(video_seg, audio_seg, i)
+        processed_segments.append(processed_output)
 
-    # Load the video
-    video = VideoFileClip(input_file)
-    
-    # Write the video to the output file with automatic codec selection
-    video.write_videofile(output_file, codec="libx264", audio_codec="aac")
-    
-    print("Video conversion successful.")
-   
-    
+    output_file = f"results/output_{random.randint(0, 1000)}.mp4"
+    concatenate_videos(processed_segments, output_file)
+
+    # Remove temporary files
+    cleanup_temp_files(video_segments + audio_segments)
+
     return output_file
 
-css="""
-#col-container{
-    margin: 0 auto;
-    max-width: 840px;
-    text-align: left;
-}
-"""
+def cleanup_temp_files(file_list):
+    for file_path in file_list:
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+
+def cut_video_segments(video_file, segment_length):
+    temp_directory = 'temp/video'
+    shutil.rmtree(temp_directory, ignore_errors=True)
+    os.makedirs(temp_directory, exist_ok=True)
+    segment_template = f"{temp_directory}/{random.randint(0, 1000)}_%03d.mp4"
+    command = ["ffmpeg", "-i", video_file, "-c", "copy", "-f", "segment", "-segment_time", str(segment_length), segment_template]
+    subprocess.run(command, check=True)
+
+    video_segments = [segment_template % i for i in range(len(os.listdir(temp_directory)))]
+    return video_segments
+
+def cut_audio_segments(audio_file, segment_length):
+    temp_directory = 'temp/audio'
+    shutil.rmtree(temp_directory, ignore_errors=True)
+    os.makedirs(temp_directory, exist_ok=True)
+    segment_template = f"{temp_directory}/{random.randint(0, 1000)}_%03d.mp3"
+    command = ["ffmpeg", "-i", audio_file, "-f", "segment", "-segment_time", str(segment_length), segment_template]
+    subprocess.run(command, check=True)
+
+    audio_segments = [segment_template % i for i in range(len(os.listdir(temp_directory)))]
+    return audio_segments
+
+def process_segment(video_seg, audio_seg, i):
+    output_file = f"results/{random.randint(10, 100000)}_{i}.mp4"
+    command = ["python", "inference.py", "--face", video_seg, "--audio", audio_seg, "--outfile", output_file]
+    subprocess.run(command, check=True)
+    return output_file
+
+def concatenate_videos(video_segments, output_file):
+    with open("segments.txt", "w") as file:
+        for segment in video_segments:
+            file.write(f"file '{segment}'\n")
+    command = ["ffmpeg", "-f", "concat", "-i", "segments.txt", "-c", "copy", output_file]
+    subprocess.run(command, check=True)
+
+def move_file(src, dest_dir):
+    shutil.move(src, os.path.join(dest_dir, os.path.basename(src)))
+    return os.path.join(dest_dir, os.path.basename(src))
+
+@app.route('/', methods=['GET'])
+def index():
+    return "Success! The API is up and running."
+
+@app.route('/generate', methods=['POST'])
+def generate():
+    segment_length = int(request.form.get('segment_length', 0))
+    video = request.files.get('video')
+    audio = request.files.get('audio')
     
-with gr.Blocks(css=css) as demo:
-    with gr.Column(elem_id="col-container"):
-        gr.HTML("""
-        <h2 style="text-align: center;">Video ReTalking</h2>
-        <p style="text-align: center;">
-            Audio-based Lip Synchronization for Talking Head Video Editing in the Wild
-        </p>
-                """)
-
-        with gr.Row():
-            with gr.Column():
-                video_source = gr.Video(label="Source Video")
-                audio_target = gr.Audio(label="Audio Target", type="filepath")
-        
-                submit_btn = gr.Button("Submit")
-
-            with gr.Column():
-                result = gr.Video(label="Result")
-
-        with gr.Row():
-            gr.Examples(
-                  label="Face Examples",
-                  examples=[
-                    "examples/face/1.mp4",
-                    "examples/face/2.mp4",
-                    "examples/face/3.mp4",
-                    "examples/face/4.mp4", 
-                    "examples/face/5.mp4"
-                  ],
-                  inputs=[video_source]
-                )
-            gr.Examples(
-                  label="Voice Examples",
-                  examples=[
-                    "examples/audio/1.wav", "examples/audio/2.wav"
-                  ],
-                  inputs=[audio_target]
-                )
-
-            
-    submit_btn.click(fn=infer, inputs=[video_source, audio_target], outputs=[result])
+    if not video or not audio:
+        return "Both video and audio files are required.", 400
     
-demo.queue(max_size=12).launch(share=True)
+    video_path = os.path.join('temp/video', video.filename)
+    audio_path = os.path.join('temp/audio', audio.filename)
+    
+    video.save(video_path)
+    audio.save(audio_path)
+
+    output_file = convert(segment_length, video_path, audio_path)
+    return send_file(output_file, as_attachment=True)
+
+def create_app():
+    return app
