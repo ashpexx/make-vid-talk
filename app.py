@@ -1,94 +1,92 @@
+from flask import Flask, request, jsonify, send_file, abort
+import tempfile
 import os
 import datetime
 import subprocess
-import tempfile
-import gradio as gr
+from doservices import DigitalOceanService
 from moviepy.editor import VideoFileClip
 
-# execute a CLI command
-def execute_command(command: str) -> None:
+app = Flask(__name__)
+do_service = DigitalOceanService()
+
+# Function to execute a CLI command
+def execute_command(command: list) -> None:
     subprocess.run(command, check=True)
 
-
-def infer(video_source, audio_target):
-    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    
-    output = f"results/result_{timestamp}.mp4"
+# Function to handle video processing
+def infer(video_url, audio_url):
+    temp_output_path = tempfile.mktemp(suffix='.mp4')
     command = [
-      f"python", 
-      f"inference.py",
-      f"--face={video_source}",
-      f"--audio={audio_target}",
-      f"--outfile={output}"
+        "python", 
+        "inference.py",
+        f"--face={video_url}",
+        f"--audio={audio_url}",
+        f"--outfile={temp_output_path}"
     ]
 
     execute_command(command)
 
-    input_file = output  # Replace with the path to your input video
-    
-    # Create a temporary directory to store the output file
-    output_dir = tempfile.mkdtemp()
-    output_file = os.path.join(output_dir, f'output_video_{timestamp}.mp4')
+    # Load the processed video
+    video = VideoFileClip(temp_output_path)
+    output_file = tempfile.mktemp(suffix='.mp4')
 
-    # Load the video
-    video = VideoFileClip(input_file)
-    
-    # Write the video to the output file with automatic codec selection
+    # Save the processed video with desired codec and settings
     video.write_videofile(output_file, codec="libx264", audio_codec="aac")
-    
-    print("Video conversion successful.")
-   
-    
+
+    # Clean up the temporary file created by inference
+    os.remove(temp_output_path)
+
     return output_file
 
-css="""
-#col-container{
-    margin: 0 auto;
-    max-width: 840px;
-    text-align: left;
-}
-"""
-    
-with gr.Blocks(css=css) as demo:
-    with gr.Column(elem_id="col-container"):
-        gr.HTML("""
-        <h2 style="text-align: center;">Video ReTalking</h2>
-        <p style="text-align: center;">
-            Audio-based Lip Synchronization for Talking Head Video Editing in the Wild
-        </p>
-                """)
+@app.route('/', methods=['GET'])
+def server_active():
+    return jsonify({'status': 'active', 'message': 'Server is running'})
 
-        with gr.Row():
-            with gr.Column():
-                video_source = gr.Video(label="Source Video")
-                audio_target = gr.Audio(label="Audio Target", type="filepath")
-        
-                submit_btn = gr.Button("Submit")
 
-            with gr.Column():
-                result = gr.Video(label="Result")
+@app.route('/upload', methods=['POST'])
+def upload():
+    if 'video' not in request.files or 'audio' not in request.files:
+        abort(400, 'Both video and audio files are required')
 
-        with gr.Row():
-            gr.Examples(
-                  label="Face Examples",
-                  examples=[
-                    "examples/face/1.mp4",
-                    "examples/face/2.mp4",
-                    "examples/face/3.mp4",
-                    "examples/face/4.mp4", 
-                    "examples/face/5.mp4"
-                  ],
-                  inputs=[video_source]
-                )
-            gr.Examples(
-                  label="Voice Examples",
-                  examples=[
-                    "examples/audio/1.wav", "examples/audio/2.wav"
-                  ],
-                  inputs=[audio_target]
-                )
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    video_file = request.files['video']
+    audio_file = request.files['audio']
 
-            
-    submit_btn.click(fn=infer, inputs=[video_source, audio_target], outputs=[result])
-    
-demo.queue(max_size=12).launch()
+    if not video_file or not audio_file:
+        abort(400, 'Both video and audio files are required')
+
+    video_slug = 'video'
+    audio_slug = 'audio'
+
+    # Upload files to DigitalOcean Spaces
+    video_url = do_service.upload_file(video_file.read(), video_slug, timestamp+video_file.filename)
+    audio_url = do_service.upload_file(audio_file.read(), audio_slug, timestamp+audio_file.filename)
+
+    # Validate file durations
+    try:
+        do_service.validate_file_duration(video_url)
+        do_service.validate_file_duration(audio_url)
+    except ValueError as e:
+        abort(400, str(e))
+
+    # Process video and generate output
+    output_file = infer(video_url, audio_url)
+    thumbnail_url = do_service.generate_thumbnail(video_url, '/tmp', 'user-thumbnail')
+
+    return jsonify({
+        'video_url': video_url,
+        'audio_url': audio_url,
+        'result_url': output_file,
+        'thumbnail_url': thumbnail_url
+    })
+
+@app.route('/delete/<string:key>', methods=['DELETE'])
+def delete_file(key):
+    try:
+        do_service.delete_file(key)
+        return jsonify({'message': 'File deleted successfully'})
+    except Exception as e:
+        abort(500, str(e))
+
+if __name__ == '__main__':
+    app.run(debug=True)
