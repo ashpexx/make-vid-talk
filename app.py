@@ -5,7 +5,6 @@ import datetime
 import subprocess
 from doservices import DigitalOceanService
 from moviepy.editor import VideoFileClip
-from gevent.pywsgi import WSGIServer
 
 app = Flask(__name__)
 do_service = DigitalOceanService()
@@ -90,5 +89,4 @@ def delete_file(key):
         abort(500, str(e))
 
 if __name__ == '__main__':
-    http_server = WSGIServer(('', 7860), app)
-    http_server.serve_forever()
+    app.run(host="0.0.0.0", port=7860)
