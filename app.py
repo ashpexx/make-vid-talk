@@ -90,5 +90,5 @@ def delete_file(key):
         abort(500, str(e))
 
 if __name__ == '__main__':
-    http_server = WSGIServer(('', 5000), app)
+    http_server = WSGIServer(('', 7860), app)
     http_server.serve_forever()
