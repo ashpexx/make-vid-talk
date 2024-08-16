@@ -59,8 +59,8 @@ def upload():
     audio_slug = 'audio'
 
     # Upload files to DigitalOcean Spaces
-    video_url = do_service.upload_file(video_file.read(), video_slug, timestamp+video_file.filename)
-    audio_url = do_service.upload_file(audio_file.read(), audio_slug, timestamp+audio_file.filename)
+    video_url = do_service.upload_file(video_file.read(), video_slug, video_file.filename)
+    audio_url = do_service.upload_file(audio_file.read(), audio_slug, audio_file.filename)
 
     # Validate file durations
     try:
@@ -70,7 +70,7 @@ def upload():
         abort(400, str(e))
 
     # Process video and generate output
-    output_file = infer(video_url, audio_url)
+    output_file = infer("https://cdn.allwebtool.com/video/"+video_file, "https://cdn.allwebtool.com/audio/"+audio_url)
     thumbnail_url = do_service.generate_thumbnail(video_url, '/tmp', 'user-thumbnail')
 
     return jsonify({
