@@ -70,7 +70,7 @@ def upload():
         abort(400, str(e))
 
     # Process video and generate output
-    output_file = infer("https://cdn.allwebtool.com/video/"+video_url, "https://cdn.allwebtool.com/audio/"+audio_url)
+    output_file = infer(video_file, audio_file)
     thumbnail_url = do_service.generate_thumbnail(video_url, '/tmp', 'user-thumbnail')
 
     return jsonify({
