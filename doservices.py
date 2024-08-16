@@ -39,7 +39,7 @@ class DigitalOceanService:
                 Body=file_content,
                 ACL='public-read'
             )
-            return f"https://cdn.allwebtool.com/{slug}/{key}"
+            return f"https://cdn.allwebtool.com/{key}"
         except (NoCredentialsError, PartialCredentialsError) as e:
             raise Exception(f"Failed to upload file to DigitalOcean: {str(e)}")
 
