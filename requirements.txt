@@ -10,6 +10,8 @@ numpy==1.22.0
 moviepy==1.0.3
 python-dotenv==1.0.1
 ffmpeg-python==0.2.0
-boto3
-flask
-gevent
+boto3==1.34.161
+flask==3.0.3
+gevent==24.2.1
+grpcio-tools==1.65.5
+grpcio==1.65.5
