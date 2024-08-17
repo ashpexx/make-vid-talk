@@ -16,13 +16,13 @@ def execute_command(command: list) -> None:
     subprocess.run(command, check=True)
 
 # Function to handle video processing
-def infer(video_url, audio_url):
+def infer(video_source, audio_target):
     temp_output_path = tempfile.mktemp(suffix='.mp4')
     command = [
         "python", 
         "inference.py",
-        f"--face={video_url}",
-        f"--audio={audio_url}",
+        f"--face={video_source}",
+        f"--audio={audio_target}",
         f"--outfile={temp_output_path}"
     ]
 
@@ -44,14 +44,12 @@ def infer(video_url, audio_url):
 def server_active():
     return jsonify({'status': 'active', 'message': 'Server is running'})
 
-
 @app.route('/upload', methods=['POST'])
 def upload():
     try:
         if 'video' not in request.files or 'audio' not in request.files:
             abort(400, 'Both video and audio files are required')
-        print("otilo bayen")
-        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        
         video_file = request.files['video']
         audio_file = request.files['audio']
 
@@ -74,7 +72,7 @@ def upload():
 
         # Download files from URLs to temporary files
         with NamedTemporaryFile(delete=False, suffix='.mp4') as video_temp_file, \
-             NamedTemporaryFile(delete=False, suffix='.mp3') as audio_temp_file:
+             NamedTemporaryFile(delete=False, suffix='.wav') as audio_temp_file:
             video_temp_file.write(requests.get(video_url).content)
             audio_temp_file.write(requests.get(audio_url).content)
             video_temp_path = video_temp_file.name
