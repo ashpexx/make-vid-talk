@@ -2,14 +2,12 @@ import grpc
 from concurrent import futures
 import service_pb2
 import service_pb2_grpc
-from flask import send_file
 import tempfile
 import os
 import datetime
 import subprocess
 from doservices import DigitalOceanService
 from moviepy.editor import VideoFileClip
-from grpc_reflection.v1alpha import reflection
 
 
 class VideoService(service_pb2_grpc.VideoServiceServicer):
