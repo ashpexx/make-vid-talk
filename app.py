@@ -5,6 +5,8 @@ import datetime
 import subprocess
 from doservices import DigitalOceanService
 from moviepy.editor import VideoFileClip
+from tempfile import NamedTemporaryFile
+import requests
 
 app = Flask(__name__)
 do_service = DigitalOceanService()
@@ -70,9 +72,21 @@ def upload():
         except ValueError as e:
             abort(400, str(e))
 
+        # Download files from URLs to temporary files
+        with NamedTemporaryFile(delete=False, suffix='.mp4') as video_temp_file, \
+             NamedTemporaryFile(delete=False, suffix='.mp3') as audio_temp_file:
+            video_temp_file.write(requests.get(video_url).content)
+            audio_temp_file.write(requests.get(audio_url).content)
+            video_temp_path = video_temp_file.name
+            audio_temp_path = audio_temp_file.name
+
         # Process video and generate output
-        output_file = infer(video_url, audio_url)
+        output_file = infer(video_temp_path, audio_temp_path)
         thumbnail_url = do_service.generate_thumbnail(video_url, '/tmp', 'user-thumbnail')
+
+        # Clean up temporary files
+        os.remove(video_temp_path)
+        os.remove(audio_temp_path)
 
         return jsonify({
             'video_url': video_url,
