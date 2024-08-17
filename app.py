@@ -47,7 +47,7 @@ def server_active():
 def upload():
     if 'video' not in request.files or 'audio' not in request.files:
         abort(400, 'Both video and audio files are required')
-
+    print("otilo bayen")
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     video_file = request.files['video']
     audio_file = request.files['audio']

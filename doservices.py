@@ -55,6 +55,11 @@ class DigitalOceanService:
 
     def validate_file_duration(self, url: str) -> None:
         duration = self.get_file_duration(url)
+
+        if not duration:
+            raise ValueError(f"Could not determine duration for file: {url}")
+
+        duration = float(duration)
         if duration > 30:
             raise ValueError('File exceeds 30 seconds')
 
