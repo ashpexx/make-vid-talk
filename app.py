@@ -82,7 +82,7 @@ def upload():
         output_file = infer(video_temp_path, audio_temp_path)
         print(output_file)
         file_content = do_service.read_file_content(output_file)
-        audio_url = do_service.upload_file(file_content, "result", video_file.filename)
+        result_url = do_service.upload_file(file_content, "result", video_file.filename)
         thumbnail_url = do_service.generate_thumbnail(video_url, '/tmp', 'user-thumbnail')
 
         # Clean up temporary files
@@ -92,7 +92,7 @@ def upload():
         return jsonify({
             'video_url': video_url,
             'audio_url': audio_url,
-            'result_url': output_file,
+            'result_url': result_url,
             'thumbnail_url': thumbnail_url
         })
     except Exception as e:
