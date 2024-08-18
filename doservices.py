@@ -73,7 +73,7 @@ class DigitalOceanService:
             with open(thumbnail_path, 'rb') as f:
                 thumbnail_buffer = f.read()
                 
-            thumbnail_url = self.upload_file(thumbnail_buffer, folder, thumbnail_filename)
+            thumbnail_url = self.upload_file(thumbnail_buffer, "thumbnails", thumbnail_filename)
             
             thumbnail_path.unlink()  # Clean up the temporary thumbnail file
             
@@ -81,4 +81,6 @@ class DigitalOceanService:
         except ffmpeg.Error as e:
             raise Exception(f"Error generating thumbnail: {str(e)}")
 
-# boto3 ffmpeg-python
+    def read_file_content(file_path):
+        with open(file_path, 'rb') as f:
+            return f.read()
