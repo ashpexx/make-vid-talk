@@ -80,7 +80,8 @@ def upload():
 
         # Process video and generate output
         output_file = infer(video_temp_path, audio_temp_path)
-        print(output_file)
+        print(video_temp_file)
+        print(audio_temp_file)
         file_content = do_service.read_file_content(output_file)
         result_url = do_service.upload_file(file_content, "result", video_file.filename)
         thumbnail_url = do_service.generate_thumbnail(video_url, '/tmp', 'user-thumbnail')
