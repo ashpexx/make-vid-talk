@@ -81,6 +81,6 @@ class DigitalOceanService:
         except ffmpeg.Error as e:
             raise Exception(f"Error generating thumbnail: {str(e)}")
 
-    def read_file_content(file_path):
+    def read_file_content(self, file_path):
         with open(file_path, 'rb') as f:
             return f.read()
