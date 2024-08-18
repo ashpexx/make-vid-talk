@@ -1,14 +1,14 @@
-from flask import Flask, request, jsonify, send_file, abort
+from fastapi import FastAPI, UploadFile, HTTPException
+from fastapi.responses import JSONResponse
 import tempfile
 import os
-import datetime
 import subprocess
 from doservices import DigitalOceanService
 from moviepy.editor import VideoFileClip
-from tempfile import NamedTemporaryFile
-import requests
+import aiofiles
+import aiohttp
 
-app = Flask(__name__)
+app = FastAPI()
 do_service = DigitalOceanService()
 
 # Function to execute a CLI command
@@ -40,73 +40,72 @@ def infer(video_source, audio_target):
 
     return output_file
 
-@app.route('/', methods=['GET'])
-def server_active():
-    return jsonify({'status': 'active', 'message': 'Server is running'})
+@app.get("/")
+async def server_active():
+    return {"status": "active", "message": "Server is running"}
 
-@app.route('/upload', methods=['POST'])
-def upload():
+@app.post("/upload")
+async def upload(video: UploadFile, audio: UploadFile):
     try:
-        if 'video' not in request.files or 'audio' not in request.files:
-            abort(400, 'Both video and audio files are required')
-        
-        video_file = request.files['video']
-        audio_file = request.files['audio']
-
-        if not video_file or not audio_file:
-            abort(400, 'Both video and audio files are required')
+        if not video or not audio:
+            raise HTTPException(status_code=400, detail="Both video and audio files are required")
 
         video_slug = 'video'
         audio_slug = 'audio'
-        print(video_file, audio_file)
+
         # Upload files to DigitalOcean Spaces
-        video_url = do_service.upload_file(video_file.read(), video_slug, video_file.filename)
-        audio_url = do_service.upload_file(audio_file.read(), audio_slug, audio_file.filename)
+        video_content = await video.read()
+        audio_content = await audio.read()
+        video_url = do_service.upload_file(video_content, video_slug, video.filename)
+        audio_url = do_service.upload_file(audio_content, audio_slug, audio.filename)
 
         # Validate file durations
         try:
             do_service.validate_file_duration(video_url)
             do_service.validate_file_duration(audio_url)
         except ValueError as e:
-            abort(400, str(e))
+            raise HTTPException(status_code=400, detail=str(e))
 
         # Download files from URLs to temporary files
-        with NamedTemporaryFile(delete=False, suffix='.mp4') as video_temp_file, \
-             NamedTemporaryFile(delete=False, suffix='.wav') as audio_temp_file:
-            video_temp_file.write(requests.get(video_url).content)
-            audio_temp_file.write(requests.get(audio_url).content)
-            video_temp_path = video_temp_file.name
-            audio_temp_path = audio_temp_file.name
+        async with aiohttp.ClientSession() as session:
+            async with session.get(video_url) as video_response:
+                video_temp_file = await aiofiles.tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+                await video_temp_file.write(await video_response.read())
+                video_temp_path = video_temp_file.name
+
+            async with session.get(audio_url) as audio_response:
+                audio_temp_file = await aiofiles.tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
+                await audio_temp_file.write(await audio_response.read())
+                audio_temp_path = audio_temp_file.name
 
         # Process video and generate output
         output_file = infer(video_temp_path, audio_temp_path)
-        print(video_temp_file)
-        print(audio_temp_file)
         file_content = do_service.read_file_content(output_file)
-        result_url = do_service.upload_file(file_content, "result", video_file.filename)
+        result_url = do_service.upload_file(file_content, "result", video.filename)
         thumbnail_url = do_service.generate_thumbnail(video_url, '/tmp', 'user-thumbnail')
 
         # Clean up temporary files
         os.remove(video_temp_path)
         os.remove(audio_temp_path)
 
-        return jsonify({
-            'video_url': video_url,
-            'audio_url': audio_url,
-            'result_url': result_url,
-            'thumbnail_url': thumbnail_url
-        })
-    except Exception as e:
-        print(e)
-        abort(500, str(e))
+        return {
+            "video_url": video_url,
+            "audio_url": audio_url,
+            "result_url": result_url,
+            "thumbnail_url": thumbnail_url
+        }
 
-@app.route('/delete/<string:key>', methods=['DELETE'])
-def delete_file(key):
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/delete/{key}")
+async def delete_file(key: str):
     try:
         do_service.delete_file(key)
-        return jsonify({'message': 'File deleted successfully'})
+        return {"message": "File deleted successfully"}
     except Exception as e:
-        abort(500, str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=7860)
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=7860)
